@@ -1,0 +1,3 @@
+#!/bin/bash
+
+ssh a-1vtlander@192.168.5.55

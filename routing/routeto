@@ -1,0 +1,73 @@
+#!/bin/zsh
+
+# routeto script: takes an alias (script name) as argument and executes the corresponding SSH command
+
+declare -A addresses=(
+    # Home Assistant backup server
+    [ha-backup]="vtlander-hassio@192.168.4.109:yes"
+    # Home Assistant at Park Street (local, no Tailscale needed)
+    [park-st-mac]="homeassistant@park-street-homeassistant-mac.local:no"
+    # Primary Home Assistant
+    [ha-primary]="vtlander-hassio@192.168.4.70:yes"
+    # Power Pi via Tailscale
+    [pi-tailscale]="a-1vtlander@vtlander-power-pi.tail6ca87d.ts.net:yes"
+    # Power Pi local
+    [pi-vtlander]="a-1vtlander@192.168.5.55:yes"
+)
+
+handle_ssh_error() {
+    output="$1"
+    alias="$2"
+    if echo "$output" | grep -q "Connection refused\|No route to host\|Network is unreachable\|Connection timed out\|Operation timed out"; then
+        echo "Error: Server unreachable ($alias)"
+    elif echo "$output" | grep -q "Permission denied\|Host key verification failed"; then
+        echo "Error: Authentication failed ($alias)"
+    else
+        echo "Error: SSH failed ($alias) - $output"
+    fi
+}
+
+run_ssh() {
+    # Test connection with 5-second timeout to quickly check reachability without hanging
+    output=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$@" echo "connected" 2>&1)
+    exit_code=$?
+    if [ $exit_code -eq 0 ]; then
+        # Connection successful, run interactive SSH
+        ssh "$@"
+    else
+        handle_ssh_error "$output" "$alias"
+    fi
+}
+
+if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    echo "Usage: $0 <alias>"
+    echo "Available aliases: ha-backup, park-st-mac, ha-primary, pi-tailscale, pi-vtlander"
+    echo ""
+    echo "This script routes SSH connections to various devices."
+    echo "For Tailscale-enabled routes (pi-tailscale), it ensures Tailscale is active."
+    echo "Local routes connect directly."
+    echo ""
+    echo "Routes:"
+    for key in ${(k)addresses}; do
+        host=$(echo ${addresses[$key]} | cut -d: -f1)
+        needs_ts=$(echo ${addresses[$key]} | cut -d: -f2)
+        echo "  $key -> $host (Tailscale: $needs_ts)"
+    done
+    exit 0
+fi
+
+alias="$1"
+
+if [[ -v addresses[$alias] ]]; then
+    host=$(echo ${addresses[$alias]} | cut -d: -f1)
+    needs_ts=$(echo ${addresses[$alias]} | cut -d: -f2)
+    if [ "$needs_ts" = "yes" ]; then
+        echo "Ensuring Tailscale is active..."
+        tailscale up
+    fi
+    run_ssh "$host"
+else
+    echo "Unknown alias: $alias"
+    echo "Available aliases: ha-backup, park-st-mac, ha-primary, pi-tailscale, pi-vtlander"
+    exit 1
+fi
