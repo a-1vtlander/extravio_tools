@@ -1,0 +1,49 @@
+#!/bin/bash
+
+echo "Testing SSH connection to GitHub..."
+output=$(ssh -T git@github.com 2>&1)
+if echo "$output" | grep -q "successfully authenticated"; then
+    echo "SSH connection successful."
+else
+    echo "SSH connection failed. Output: $output"
+    exit 1
+fi
+
+echo "Enter the repository name: "
+read REPO_NAME
+
+echo "Enter your GitHub personal access token:"
+read -s GITHUB_TOKEN
+
+echo "Checking if repository exists on GitHub..."
+repo_status=$(curl -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/a-1vtlander/$REPO_NAME -s -o /dev/null -w "%{http_code}")
+
+if [ "$repo_status" -eq 200 ]; then
+    echo "Repository exists, creating directory and cloning..."
+    mkdir $REPO_NAME
+    cd $REPO_NAME
+    git clone https://github.com/a-1vtlander/$REPO_NAME.git .
+elif [ "$repo_status" -eq 404 ]; then
+    echo "Repository does not exist, creating it..."
+    if curl -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/json" -d "{\"name\":\"$REPO_NAME\", \"private\": true}" https://api.github.com/user/repos -s -o /dev/null -w "%{http_code}" | grep -q "201"; then
+        echo "Remote repository created successfully."
+        git init
+        git remote add origin https://github.com/a-1vtlander/$REPO_NAME.git
+
+        git add .
+        if git diff --cached --quiet; then
+            echo "No changes to commit."
+        else
+            git commit -m "Initial commit"
+            git push -u origin main
+        fi
+
+    else
+        echo "Failed to create remote repository. Exiting."
+        exit 1
+    fi
+else
+    echo "Unexpected response from GitHub API: $repo_status. Exiting."
+    exit 1
+fi
+
