@@ -3,11 +3,35 @@
 # file_copy script: copies a file to a route destination using scp
 
 source "$(dirname "$0")/routes.conf"
+source "$(dirname "$0")/common.sh"
+
+ensure_ssh_agent
 
 handle_scp_error() {
     output="$1"
     alias="$2"
-    echo "SCP failed for $alias: $output"
+    if echo "$output" | grep -q "permission denied"; then
+        echo "Permission denied for $alias. Check remote user permissions or try a different destination path."
+    else
+        echo "SCP failed for $alias: $output"
+    fi
+}
+
+copy_via_ssh() {
+    local src="$1"
+    local host="$2"
+    local dst="$3"
+    if [ -d "$src" ]; then
+        echo "Directory copy via SSH not supported for $alias. Use SCP or manual method."
+        return 1
+    fi
+    local target="$dst"
+    if [[ "$dst" == */ ]]; then
+        target="$dst$(basename "$src")"
+    fi
+    # Try to create the target directory with sudo
+    ssh "$host" "sudo mkdir -p \"$(dirname "$target")\"" 2>/dev/null || true
+    cat "$src" | ssh "$host" "sudo tee '$target' > /dev/null"
 }
 
 if [ $# -lt 3 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
@@ -44,19 +68,22 @@ if get_address "$alias" >/dev/null 2>&1; then
     addr=$(get_address "$alias")
     host=$(echo "$addr" | cut -d: -f1)
     needs_ts=$(echo "$addr" | cut -d: -f2)
-    if [ "$needs_ts" = "yes" ]; then
-        echo "Ensuring Tailscale is active..."
-        tailscale up
-    fi
+    ensure_tailscale "$needs_ts"
     echo "Copying $src to $host:$dst..."
-    if [ -d "$src" ]; then
-        echo "Running: scp -r -o ConnectTimeout=10 \"$src\" \"$host:$dst\""
-        output=$(scp -r -o ConnectTimeout=10 "$src" "$host:$dst" 2>&1)
+    if [[ "$alias" == ha-* ]]; then
+        echo "Using SSH for copy (SCP not supported for $alias)..."
+        output=$(copy_via_ssh "$src" "$host" "$dst" 2>&1)
+        exit_code=$?
     else
-        echo "Running: scp -o ConnectTimeout=10 \"$src\" \"$host:$dst\""
-        output=$(scp -o ConnectTimeout=10 "$src" "$host:$dst" 2>&1)
+        if [ -d "$src" ]; then
+            echo "Running: scp -r -o ConnectTimeout=10 \"$src\" \"$host:$dst\""
+            output=$(scp -r -o ConnectTimeout=10 "$src" "$host:$dst" 2>&1)
+        else
+            echo "Running: scp -o ConnectTimeout=10 \"$src\" \"$host:$dst\""
+            output=$(scp -o ConnectTimeout=10 "$src" "$host:$dst" 2>&1)
+        fi
+        exit_code=$?
     fi
-    exit_code=$?
     if [ $exit_code -eq 0 ]; then
         echo "File copied successfully."
     else

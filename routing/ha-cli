@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+
+source "$(dirname "$0")/routes.conf"
+source "$(dirname "$0")/common.sh"
+
+ensure_ssh_agent
+
+if [ $# -lt 2 ]; then
+  echo "Usage: $0 <route> <command> [args...]"
+  echo "Routes can be shortened (e.g., 'primary' for 'ha-primary')."
+  echo "Available HA routes:"
+  for key in "${keys[@]}"; do
+    if [[ "$key" == ha-* ]]; then
+      addr=$(get_address "$key")
+      host=$(echo "$addr" | cut -d: -f1)
+      short="${key#ha-}"
+      echo "  $key (or $short) -> $host"
+    fi
+  done
+  exit 1
+fi
+
+alias="$1"
+# Allow shortened routes by prepending 'ha-' if not already present
+if [[ "$alias" != ha-* ]]; then
+    alias="ha-$alias"
+fi
+shift
+
+if ! addr="$(get_address "$alias" 2>/dev/null)"; then
+    echo "Unknown HA route: $alias"
+    exit 1
+fi
+
+host="${addr%%:*}"
+needs_ts="${addr#*:}"
+ensure_tailscale "$needs_ts"
+
+# Build a safely-escaped command string for the remote zsh -lc context
+# Example result: ha\ core\ info\ --raw
+remote_cmd="ha"
+for arg in "$@"; do
+  remote_cmd+=" $(printf '%q' "$arg")"
+done
+
+echo "-> Executing on $alias ($host): $remote_cmd"
+echo
+
+output=$(ssh "$host" 'PAGER=cat LESS=-FRSX; [ -r /etc/profile.d/homeassistant.sh ] && . /etc/profile.d/homeassistant.sh; '$remote_cmd 2>&1)
+exit_code=$?
+
+if [ -n "$output" ]; then
+    # Calculate max width
+    max_width=0
+    while IFS= read -r line; do
+        len=${#line}
+        if [ $len -gt $max_width ]; then
+            max_width=$len
+        fi
+    done <<< "$output"
+    box_width=$((max_width + 4))  # Padding for | space content space |
+
+    # Top border
+    printf '+'
+    printf '%*s' $((box_width - 2)) '' | tr ' ' '-'
+    printf '+\n'
+
+    # Content
+    while IFS= read -r line; do
+        printf '| %-*s |\n' $((box_width - 4)) "$line"
+    done <<< "$output"
+
+    # Bottom border
+    printf '+'
+    printf '%*s' $((box_width - 2)) '' | tr ' ' '-'
+    printf '+\n'
+fi
+
+echo
+if [ $exit_code -ne 0 ]; then
+    echo "-> Remote command returned exit code $exit_code"
+    echo
+else
+    echo "-> DONE, exit code 0"
+    echo
+fi 

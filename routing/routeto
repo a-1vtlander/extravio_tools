@@ -3,19 +3,9 @@
 # routeto script: takes an alias (script name) as argument and executes the corresponding SSH command
 
 source "$(dirname "$0")/routes.conf"
+source "$(dirname "$0")/common.sh"
 
-# Check and start ssh-agent if not running
-if ! ssh-add -l >/dev/null 2>&1; then
-    echo "Starting ssh-agent..."
-    eval "$(ssh-agent -s)"
-    # Add all private keys corresponding to .pub files in ~/.ssh
-    for pub in ~/.ssh/*.pub; do
-        priv="${pub%.pub}"
-        if [ -f "$priv" ]; then
-            ssh-add "$priv"
-        fi
-    done
-fi
+ensure_ssh_agent
 
 handle_ssh_error() {
     output="$1"
@@ -64,10 +54,7 @@ if get_address "$alias" >/dev/null 2>&1; then
     addr=$(get_address "$alias")
     host=$(echo "$addr" | cut -d: -f1)
     needs_ts=$(echo "$addr" | cut -d: -f2)
-    if [ "$needs_ts" = "yes" ]; then
-        echo "Ensuring Tailscale is active..."
-        tailscale up
-    fi
+    ensure_tailscale "$needs_ts"
     run_ssh "$host"
 else
     echo "Unknown alias: $alias"
