@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 
 # routeto script: takes an alias (script name) as argument and executes the corresponding SSH command
 
@@ -29,15 +29,14 @@ run_ssh() {
 }
 
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    echo "Usage: $0 <alias>"
-    echo "Available aliases: ha-backup, park-st-mac, ha-primary, pi-tailscale, pi-vtlander"
+    echo "Usage: $(basename "$0")"
     echo ""
     echo "This script routes SSH connections to various devices."
     echo "For Tailscale-enabled routes (pi-tailscale), it ensures Tailscale is active."
     echo "Local routes connect directly."
     echo ""
     echo "Routes:"
-    for key in ${(k)addresses}; do
+    for key in ${!addresses[@]}; do
         host=$(echo ${addresses[$key]} | cut -d: -f1)
         needs_ts=$(echo ${addresses[$key]} | cut -d: -f2)
         echo "  $key -> $host (Tailscale: $needs_ts)"

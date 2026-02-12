@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 
 # file_copy script: copies a file to a route destination using scp
 
@@ -13,7 +13,7 @@ handle_scp_error() {
 if [ $# -lt 3 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "Usage: $(basename "$0") <route> <source> <destination>"
     echo "Available routes:"
-    for key in ${(k)addresses}; do
+    for key in ${!addresses[@]}; do
         echo "  $key"
     done
     echo ""
@@ -22,7 +22,7 @@ if [ $# -lt 3 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "Local routes connect directly."
     echo ""
     echo "Routes:"
-    for key in ${(k)addresses}; do
+    for key in ${!addresses[@]}; do
         host=$(echo ${addresses[$key]} | cut -d: -f1)
         needs_ts=$(echo ${addresses[$key]} | cut -d: -f2)
         echo "  $key -> $host (Tailscale: $needs_ts)"
@@ -64,7 +64,7 @@ if [[ -v addresses[$alias] ]]; then
 else
     echo "Unknown alias: $alias"
     echo "Available aliases:"
-    for key in ${(k)addresses}; do
+    for key in ${!addresses[@]}; do
         echo "  $key"
     done
     exit 1
