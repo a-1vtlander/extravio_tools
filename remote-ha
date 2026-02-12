@@ -60,20 +60,25 @@ if [ -n "$output" ]; then
     done <<< "$output"
     box_width=$((max_width + 4))  # Padding for | space content space |
 
-    # Top border
-    printf '+'
-    printf '%*s' $((box_width - 2)) '' | tr ' ' '-'
-    printf '+\n'
+    if [ $box_width -gt 200 ]; then
+        # Output without box if too wide
+        echo "$output"
+    else
+        # Top border
+        printf '+'
+        printf '%*s' $((box_width - 2)) '' | tr ' ' '-'
+        printf '+\n'
 
-    # Content
-    while IFS= read -r line; do
-        printf '| %-*s |\n' $((box_width - 4)) "$line"
-    done <<< "$output"
+        # Content
+        while IFS= read -r line; do
+            printf '| %-*s |\n' $((box_width - 4)) "$line"
+        done <<< "$output"
 
-    # Bottom border
-    printf '+'
-    printf '%*s' $((box_width - 2)) '' | tr ' ' '-'
-    printf '+\n'
+        # Bottom border
+        printf '+'
+        printf '%*s' $((box_width - 2)) '' | tr ' ' '-'
+        printf '+\n'
+    fi
 fi
 
 echo
