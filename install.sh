@@ -9,10 +9,18 @@ if [[ "$SHELL" == *"zsh"* ]]; then
     SHELL_RC="$HOME/.zshrc"
 fi
 
-echo "Adding subdirectories to PATH in $SHELL_RC..."
+echo "Adding directories to PATH in $SHELL_RC..."
 
-# Find all subdirectories under project root
-for dir in $(find "$PROJECT_ROOT" -type d -mindepth 1 -maxdepth 1); do
+# Add the project root to PATH
+if ! grep -q "export PATH=\"$PROJECT_ROOT:\$PATH\"" "$SHELL_RC"; then
+    echo "export PATH=\"$PROJECT_ROOT:\$PATH\"" >> "$SHELL_RC"
+    echo "Added $PROJECT_ROOT to PATH"
+else
+    echo "$PROJECT_ROOT already in PATH"
+fi
+
+# Find all non-hidden subdirectories under project root
+for dir in $(find "$PROJECT_ROOT" -mindepth 1 -maxdepth 1 -type d -name "[^.]*"); do
     # Check if already in PATH or rc file
     if ! grep -q "export PATH=\"$dir:\$PATH\"" "$SHELL_RC"; then
         echo "export PATH=\"$dir:\$PATH\"" >> "$SHELL_RC"
