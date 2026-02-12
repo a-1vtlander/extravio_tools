@@ -1,0 +1,71 @@
+#!/bin/zsh
+
+# file_copy script: copies a file to a route destination using scp
+
+source "$(dirname "$0")/routes.conf"
+
+handle_scp_error() {
+    output="$1"
+    alias="$2"
+    echo "SCP failed for $alias: $output"
+}
+
+if [ $# -lt 3 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    echo "Usage: $(basename "$0") <route> <source> <destination>"
+    echo "Available routes:"
+    for key in ${(k)addresses}; do
+        echo "  $key"
+    done
+    echo ""
+    echo "This script copies files to various devices via SCP."
+    echo "For Tailscale-enabled routes (pi-tailscale), it ensures Tailscale is active."
+    echo "Local routes connect directly."
+    echo ""
+    echo "Routes:"
+    for key in ${(k)addresses}; do
+        host=$(echo ${addresses[$key]} | cut -d: -f1)
+        needs_ts=$(echo ${addresses[$key]} | cut -d: -f2)
+        echo "  $key -> $host (Tailscale: $needs_ts)"
+    done
+    exit 0
+fi
+
+alias="$1"
+src="$2"
+dst="$3"
+
+if [ ! -e "$src" ]; then
+    echo "Error: Source file/directory '$src' not found."
+    exit 1
+fi
+
+if [[ -v addresses[$alias] ]]; then
+    host=$(echo ${addresses[$alias]} | cut -d: -f1)
+    needs_ts=$(echo ${addresses[$alias]} | cut -d: -f2)
+    if [ "$needs_ts" = "yes" ]; then
+        echo "Ensuring Tailscale is active..."
+        tailscale up
+    fi
+    echo "Copying $src to $host:$dst..."
+    if [ -d "$src" ]; then
+        echo "Running: scp -r -o ConnectTimeout=10 \"$src\" \"$host:$dst\""
+        output=$(scp -r -o ConnectTimeout=10 "$src" "$host:$dst" 2>&1)
+    else
+        echo "Running: scp -o ConnectTimeout=10 \"$src\" \"$host:$dst\""
+        output=$(scp -o ConnectTimeout=10 "$src" "$host:$dst" 2>&1)
+    fi
+    exit_code=$?
+    if [ $exit_code -eq 0 ]; then
+        echo "File copied successfully."
+    else
+        handle_scp_error "$output" "$alias"
+        exit 1
+    fi
+else
+    echo "Unknown alias: $alias"
+    echo "Available aliases:"
+    for key in ${(k)addresses}; do
+        echo "  $key"
+    done
+    exit 1
+fi
