@@ -4,6 +4,19 @@
 
 source "$(dirname "$0")/routes.conf"
 
+# Check and start ssh-agent if not running
+if ! ssh-add -l >/dev/null 2>&1; then
+    echo "Starting ssh-agent..."
+    eval "$(ssh-agent -s)"
+    # Add all private keys corresponding to .pub files in ~/.ssh
+    for pub in ~/.ssh/*.pub; do
+        priv="${pub%.pub}"
+        if [ -f "$priv" ]; then
+            ssh-add "$priv"
+        fi
+    done
+fi
+
 handle_ssh_error() {
     output="$1"
     alias="$2"
@@ -36,9 +49,10 @@ if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "Local routes connect directly."
     echo ""
     echo "Routes:"
-    for key in ${!addresses[@]}; do
-        host=$(echo ${addresses[$key]} | cut -d: -f1)
-        needs_ts=$(echo ${addresses[$key]} | cut -d: -f2)
+    for key in "${keys[@]}"; do
+        addr=$(get_address "$key")
+        host=$(echo "$addr" | cut -d: -f1)
+        needs_ts=$(echo "$addr" | cut -d: -f2)
         echo "  $key -> $host (Tailscale: $needs_ts)"
     done
     exit 0
@@ -46,9 +60,10 @@ fi
 
 alias="$1"
 
-if [[ -v addresses[$alias] ]]; then
-    host=$(echo ${addresses[$alias]} | cut -d: -f1)
-    needs_ts=$(echo ${addresses[$alias]} | cut -d: -f2)
+if get_address "$alias" >/dev/null 2>&1; then
+    addr=$(get_address "$alias")
+    host=$(echo "$addr" | cut -d: -f1)
+    needs_ts=$(echo "$addr" | cut -d: -f2)
     if [ "$needs_ts" = "yes" ]; then
         echo "Ensuring Tailscale is active..."
         tailscale up

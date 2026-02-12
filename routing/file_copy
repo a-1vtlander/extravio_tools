@@ -13,7 +13,7 @@ handle_scp_error() {
 if [ $# -lt 3 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "Usage: $(basename "$0") <route> <source> <destination>"
     echo "Available routes:"
-    for key in ${!addresses[@]}; do
+    for key in "${keys[@]}"; do
         echo "  $key"
     done
     echo ""
@@ -22,9 +22,10 @@ if [ $# -lt 3 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "Local routes connect directly."
     echo ""
     echo "Routes:"
-    for key in ${!addresses[@]}; do
-        host=$(echo ${addresses[$key]} | cut -d: -f1)
-        needs_ts=$(echo ${addresses[$key]} | cut -d: -f2)
+    for key in "${keys[@]}"; do
+        addr=$(get_address "$key")
+        host=$(echo "$addr" | cut -d: -f1)
+        needs_ts=$(echo "$addr" | cut -d: -f2)
         echo "  $key -> $host (Tailscale: $needs_ts)"
     done
     exit 0
@@ -39,9 +40,10 @@ if [ ! -e "$src" ]; then
     exit 1
 fi
 
-if [[ -v addresses[$alias] ]]; then
-    host=$(echo ${addresses[$alias]} | cut -d: -f1)
-    needs_ts=$(echo ${addresses[$alias]} | cut -d: -f2)
+if get_address "$alias" >/dev/null 2>&1; then
+    addr=$(get_address "$alias")
+    host=$(echo "$addr" | cut -d: -f1)
+    needs_ts=$(echo "$addr" | cut -d: -f2)
     if [ "$needs_ts" = "yes" ]; then
         echo "Ensuring Tailscale is active..."
         tailscale up
@@ -64,7 +66,7 @@ if [[ -v addresses[$alias] ]]; then
 else
     echo "Unknown alias: $alias"
     echo "Available aliases:"
-    for key in ${!addresses[@]}; do
+    for key in "${keys[@]}"; do
         echo "  $key"
     done
     exit 1
