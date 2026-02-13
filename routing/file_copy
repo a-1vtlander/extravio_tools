@@ -2,7 +2,7 @@
 
 # file_copy script: copies a file to a route destination using scp
 
-source "$(dirname "$0")/routes.conf"
+source "$(dirname "$0")/get_routes.sh"
 source "$(dirname "$0")/common.sh"
 
 ensure_ssh_agent
@@ -64,14 +64,21 @@ if [ ! -e "$src" ]; then
     exit 1
 fi
 
-if get_address "$alias" >/dev/null 2>&1; then
-    addr=$(get_address "$alias")
+# Try to get best match (exact or partial)
+best_match=$(get_best_match "$alias")
+match_result=$?
+
+if [ $match_result -eq 0 ]; then
+    addr=$(get_address "$best_match")
     host=$(echo "$addr" | cut -d: -f1)
     needs_ts=$(echo "$addr" | cut -d: -f2)
+    if [ "$best_match" != "$alias" ]; then
+        echo "-> Using partial match: '$alias' -> '$best_match'"
+    fi
     ensure_tailscale "$needs_ts"
     echo "Copying $src to $host:$dst..."
-    if [[ "$alias" == ha-* ]]; then
-        echo "Using SSH for copy (SCP not supported for $alias)..."
+    if [[ "$best_match" == ha-* ]]; then
+        echo "Using SSH for copy (SCP not supported for $best_match)..."
         output=$(copy_via_ssh "$src" "$host" "$dst" 2>&1)
         exit_code=$?
     else
@@ -87,9 +94,14 @@ if get_address "$alias" >/dev/null 2>&1; then
     if [ $exit_code -eq 0 ]; then
         echo "File copied successfully."
     else
-        handle_scp_error "$output" "$alias"
+        handle_scp_error "$output" "$best_match"
         exit 1
     fi
+elif [ $match_result -eq 2 ]; then
+    echo "Ambiguous alias: $alias"
+    echo "Multiple matches found:"
+    find_partial_matches "$alias" | sed 's/^/  /'
+    exit 1
 else
     echo "Unknown alias: $alias"
     echo "Available aliases:"

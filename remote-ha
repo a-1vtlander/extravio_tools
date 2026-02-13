@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source "$(dirname "$0")/routing/routes.conf"
+source "$(dirname "$0")/routing/get_routes.sh"
 source "$(dirname "$0")/routing/common.sh"
 
 ensure_ssh_agent
@@ -36,10 +36,25 @@ host="${addr%%:*}"
 needs_ts="${addr#*:}"
 ensure_tailscale "$needs_ts"
 
+# Handle special addon aliases
+args=("$@")
+if [ "${args[0]}" = "addons" ] && [ ${#args[@]} -gt 2 ]; then
+    case "${args[2]}" in
+        ewelink)
+            args[2]="f4f71350_ewelink_smart_home_slug"
+            echo "-> Translating addon slug 'ewelink' to 'f4f71350_ewelink_smart_home_slug'"
+            ;;
+        mqtt)
+            args[2]="core_mosquitto"
+            echo "-> Translating addon slug 'mqtt' to 'core_mosquitto'"
+            ;;
+    esac
+fi
+
 # Build a safely-escaped command string for the remote zsh -lc context
 # Example result: ha\ core\ info\ --raw
 remote_cmd="ha"
-for arg in "$@"; do
+for arg in "${args[@]}"; do
   remote_cmd+=" $(printf '%q' "$arg")"
 done
 

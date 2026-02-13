@@ -2,7 +2,7 @@
 
 # routeto script: takes an alias (script name) as argument and executes the corresponding SSH command
 
-source "$(dirname "$0")/routes.conf"
+source "$(dirname "$0")/get_routes.sh"
 source "$(dirname "$0")/common.sh"
 
 ensure_ssh_agent
@@ -20,14 +20,39 @@ handle_ssh_error() {
 }
 
 run_ssh() {
-    # Test connection with 5-second timeout to quickly check reachability without hanging
-    output=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$@" echo "connected" 2>&1)
-    exit_code=$?
-    if [ $exit_code -eq 0 ]; then
-        # Connection successful, run interactive SSH
-        ssh "$@"
+    local docker_mode="$1"
+    local container="$2"
+    shift 2
+    
+    if [ "$docker_mode" = "docker" ]; then
+        # Test connection with 5-second timeout for docker host
+        output=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$@" echo "connected" 2>&1)
+        exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+            # Test if docker is available on remote host (check common paths)
+            docker_test=$(ssh "$@" "command -v docker >/dev/null 2>&1 && echo 'docker-available' || { [ -x /usr/bin/docker ] && echo 'docker-available' || { [ -x /usr/local/bin/docker ] && echo 'docker-available' || { [ -x /opt/homebrew/bin/docker ] && echo 'docker-available'; }; }; }" 2>&1)
+            if [[ "$docker_test" == *"docker-available"* ]]; then
+                # Docker is available, determine the correct path
+                docker_cmd=$(ssh "$@" "command -v docker 2>/dev/null || { [ -x /usr/bin/docker ] && echo '/usr/bin/docker'; } || { [ -x /usr/local/bin/docker ] && echo '/usr/local/bin/docker'; } || { [ -x /opt/homebrew/bin/docker ] && echo '/opt/homebrew/bin/docker'; }" 2>/dev/null)
+                ssh -t "$@" "$docker_cmd" exec -it "$container" /bin/bash
+            else
+                echo "Error: Docker not available on remote host ($alias)"
+                echo "Please install Docker on the target host or check if Docker daemon is running"
+                exit 1
+            fi
+        else
+            handle_ssh_error "$output" "$alias"
+        fi
     else
-        handle_ssh_error "$output" "$alias"
+        # Test connection with 5-second timeout to quickly check reachability without hanging
+        output=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$@" echo "connected" 2>&1)
+        exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+            # Connection successful, run interactive SSH
+            ssh "$@"
+        else
+            handle_ssh_error "$output" "$alias"
+        fi
     fi
 }
 
@@ -40,24 +65,64 @@ if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo ""
     echo "Routes:"
     for key in "${keys[@]}"; do
-        addr=$(get_address "$key")
-        host=$(echo "$addr" | cut -d: -f1)
-        needs_ts=$(echo "$addr" | cut -d: -f2)
-        echo "  $key -> $host (Tailscale: $needs_ts)"
+        if docker_info=$(get_docker_info "$key" 2>/dev/null); then
+            # This is a docker route
+            host=$(echo "$docker_info" | cut -d: -f1)
+            needs_ts=$(echo "$docker_info" | cut -d: -f2)
+            container=$(echo "$docker_info" | cut -d: -f3)
+            echo "  $key -> $host (Docker: $container, Tailscale: $needs_ts)"
+        else
+            # Regular route
+            addr=$(get_address "$key")
+            host=$(echo "$addr" | cut -d: -f1)
+            needs_ts=$(echo "$addr" | cut -d: -f2)
+            echo "  $key -> $host (Tailscale: $needs_ts)"
+        fi
     done
     exit 0
 fi
 
 alias="$1"
 
-if get_address "$alias" >/dev/null 2>&1; then
-    addr=$(get_address "$alias")
-    host=$(echo "$addr" | cut -d: -f1)
-    needs_ts=$(echo "$addr" | cut -d: -f2)
-    ensure_tailscale "$needs_ts"
-    run_ssh "$host"
+# Try to get best match (exact or partial)
+best_match=$(get_best_match "$alias")
+match_result=$?
+
+if [ $match_result -eq 0 ]; then
+    # Check if this is a docker route
+    if docker_info=$(get_docker_info "$best_match" 2>/dev/null); then
+        # This is a docker route
+        host=$(echo "$docker_info" | cut -d: -f1)
+        needs_ts=$(echo "$docker_info" | cut -d: -f2) 
+        container=$(echo "$docker_info" | cut -d: -f3)
+        
+        if [ "$best_match" != "$alias" ]; then
+            echo "-> Using partial match: '$alias' -> '$best_match'"
+        fi
+        echo "-> Connecting to docker container '$container' on host '$host'"
+        ensure_tailscale "$needs_ts"
+        run_ssh "docker" "$container" "$host"
+    else
+        # Regular SSH route
+        addr=$(get_address "$best_match")
+        host=$(echo "$addr" | cut -d: -f1)
+        needs_ts=$(echo "$addr" | cut -d: -f2)
+        if [ "$best_match" != "$alias" ]; then
+            echo "-> Using partial match: '$alias' -> '$best_match'"
+        fi
+        ensure_tailscale "$needs_ts"
+        run_ssh "regular" "" "$host"
+    fi
+elif [ $match_result -eq 2 ]; then
+    echo "Ambiguous alias: $alias"
+    echo "Multiple matches found:"
+    find_partial_matches "$alias" | sed 's/^/  /'
+    exit 1
 else
     echo "Unknown alias: $alias"
-    echo "Available aliases: ha-backup, park-st-mac, ha-primary, pi-tailscale, pi-vtlander"
+    echo "Available aliases:"
+    for key in "${keys[@]}"; do
+        echo "  $key"
+    done
     exit 1
 fi

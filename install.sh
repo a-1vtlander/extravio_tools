@@ -30,4 +30,14 @@ for dir in $(find "$PROJECT_ROOT" -mindepth 1 -maxdepth 1 -type d -name "[^.]*")
     fi
 done
 
+# Add bash completion
+COMPLETION_LINE="source \"$PROJECT_ROOT/routing/completion.sh\""
+if ! grep -q "$COMPLETION_LINE" "$SHELL_RC"; then
+    echo "$COMPLETION_LINE" >> "$SHELL_RC"
+    echo "Added bash/zsh completion for routing tools"
+else
+    echo "Shell completion already configured"
+fi
+
 echo "Installation complete. Please restart your shell or run 'source $SHELL_RC' to apply changes."
+echo "Tab completion will be available for: routeto, file_copy, remote-ha, remote-docker"

@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+
+source "$(dirname "$0")/routing/get_routes.sh"
+source "$(dirname "$0")/routing/common.sh"
+
+ensure_ssh_agent
+
+if [ $# -lt 2 ]; then
+  echo "Usage: $0 <route> <command> [args...]"
+  echo "Execute commands in docker containers on remote hosts."
+  echo "Available docker routes:"
+  for key in "${keys[@]}"; do
+    if docker_info=$(get_docker_info "$key" 2>/dev/null); then
+      host=$(echo "$docker_info" | cut -d: -f1)
+      container=$(echo "$docker_info" | cut -d: -f3)
+      echo "  $key -> container '$container' on $host"
+    fi
+  done
+  exit 1
+fi
+
+alias="$1"
+shift
+
+# Try to get best match (exact or partial)
+best_match=$(get_best_match "$alias")
+match_result=$?
+
+if [ $match_result -eq 0 ]; then
+    # Check if this is a docker route
+    if ! docker_info=$(get_docker_info "$best_match" 2>/dev/null); then
+        echo "Error: '$best_match' is not a docker route"
+        exit 1
+    fi
+    
+    host=$(echo "$docker_info" | cut -d: -f1)
+    needs_ts=$(echo "$docker_info" | cut -d: -f2) 
+    container=$(echo "$docker_info" | cut -d: -f3)
+    
+    if [ "$best_match" != "$alias" ]; then
+        echo "-> Using partial match: '$alias' -> '$best_match'"
+    fi
+    
+    ensure_tailscale "$needs_ts"
+    
+    # Build a safely-escaped command string for the remote docker exec context
+    remote_cmd=""
+    for arg in "$@"; do
+      if [ -z "$remote_cmd" ]; then
+        remote_cmd="$(printf '%q' "$arg")"
+      else
+        remote_cmd+=" $(printf '%q' "$arg")"
+      fi
+    done
+
+    echo "-> Executing in container '$container' on $best_match ($host): $remote_cmd"
+    echo
+
+    # Test if docker is available on remote host first (check common paths)
+    docker_test=$(ssh "$host" "command -v docker >/dev/null 2>&1 && echo 'docker-available' || { [ -x /usr/bin/docker ] && echo 'docker-available' || { [ -x /usr/local/bin/docker ] && echo 'docker-available' || { [ -x /opt/homebrew/bin/docker ] && echo 'docker-available'; }; }; }" 2>&1)
+    if [[ "$docker_test" != *"docker-available"* ]]; then
+        echo "Error: Docker not available on remote host ($best_match)"
+        echo "Please install Docker on the target host or check if Docker daemon is running"
+        exit 1
+    fi
+
+    # Determine the correct docker command path
+    docker_cmd=$(ssh "$host" "command -v docker 2>/dev/null || { [ -x /usr/bin/docker ] && echo '/usr/bin/docker'; } || { [ -x /usr/local/bin/docker ] && echo '/usr/local/bin/docker'; } || { [ -x /opt/homebrew/bin/docker ] && echo '/opt/homebrew/bin/docker'; }" 2>/dev/null)
+    
+    output=$(ssh "$host" "$docker_cmd exec $container $remote_cmd" 2>&1)
+    exit_code=$?
+
+    if [ -n "$output" ]; then
+        # Calculate max width
+        max_width=0
+        while IFS= read -r line; do
+            len=${#line}
+            if [ $len -gt $max_width ]; then
+                max_width=$len
+            fi
+        done <<< "$output"
+        box_width=$((max_width + 4))  # Padding for | space content space |
+
+        if [ $box_width -gt 200 ]; then
+            # Output without box if too wide
+            echo "$output"
+        else
+            # Top border
+            printf '+'
+            printf '%*s' $((box_width - 2)) '' | tr ' ' '-'
+            printf '+\n'
+
+            # Content
+            while IFS= read -r line; do
+                printf '| %-*s |\n' $((box_width - 4)) "$line"
+            done <<< "$output"
+
+            # Bottom border
+            printf '+'
+            printf '%*s' $((box_width - 2)) '' | tr ' ' '-'
+            printf '+\n'
+        fi
+    fi
+
+    echo
+    if [ $exit_code -ne 0 ]; then
+        echo "-> Docker command returned exit code $exit_code"
+        echo
+    else
+        echo "-> DONE, exit code 0"
+        echo
+    fi
+
+elif [ $match_result -eq 2 ]; then
+    echo "Ambiguous alias: $alias"
+    echo "Multiple matches found:"
+    find_partial_matches "$alias" | sed 's/^/  /'
+    exit 1
+else
+    echo "Unknown alias: $alias"
+    echo "Available docker routes:"
+    for key in "${keys[@]}"; do
+      if docker_info=$(get_docker_info "$key" 2>/dev/null); then
+        host=$(echo "$docker_info" | cut -d: -f1)
+        container=$(echo "$docker_info" | cut -d: -f3)
+        echo "  $key -> container '$container' on $host"
+      fi
+    done
+    exit 1
+fi

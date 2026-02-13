@@ -1,0 +1,46 @@
+{
+  "ha-backup": {
+    "username": "vtlander-hassio",
+    "hostroute": "192.168.4.109",
+    "tailscale_required": "yes",
+    "hosttype": "ha"
+  },
+  "ha-primary": {
+    "username": "vtlander-hassio", 
+    "hostroute": "192.168.4.70",
+    "tailscale_required": "yes",
+    "hosttype": "ha"
+  },
+  "park-st-mac": {
+    "username": "homeassistant",
+    "hostroute": "park-street-homeassistant-mac.local",
+    "tailscale_required": "no",
+    "hosttype": "mac"
+  },
+  "pi-tailscale": {
+    "username": "a-1vtlander",
+    "hostroute": "vtlander-power-pi.tail6ca87d.ts.net",
+    "tailscale_required": "yes",
+    "hosttype": "pi"
+  },
+  "pi-vtlander": {
+    "username": "a-1vtlander",
+    "hostroute": "192.168.5.55",
+    "tailscale_required": "yes",
+    "hosttype": "pi"
+  },
+   "dev-ha-mac": {
+    "username": "homeassistant",
+    "dockercontainer": "ha-dev",
+    "hostroute": "park-street-homeassistant-mac.local",
+    "tailscale_required": "no",
+    "hosttype": "docker"
+  },
+   "prod-ha-mac": {
+    "username": "homeassistant",
+    "dockercontainer": "homeassistant",
+    "hostroute": "park-street-homeassistant-mac.local",
+    "tailscale_required": "no",
+    "hosttype": "docker"
+  } 
+}
