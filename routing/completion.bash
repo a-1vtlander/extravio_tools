@@ -10,7 +10,7 @@ if [ -n "$BASH_VERSION" ]; then
         COMPREPLY=()
         cur="${COMP_WORDS[COMP_CWORD]}"
         prev="${COMP_WORDS[COMP_CWORD-1]}"
-        
+
         # Find the script directory - try multiple approaches
         if [[ "${COMP_WORDS[0]}" == *"/routing/"* ]]; then
             script_dir="$(dirname "${COMP_WORDS[0]}")"
@@ -24,7 +24,7 @@ if [ -n "$BASH_VERSION" ]; then
                 script_dir="./routing"
             fi
         fi
-        
+
         # Source the routes to get available aliases
         if [ -f "$script_dir/get_routes.sh" ]; then
             # Source quietly and check if keys array was populated
@@ -32,7 +32,7 @@ if [ -n "$BASH_VERSION" ]; then
             if [ ${#keys[@]} -eq 0 ]; then
                 return 1  # Fall back to default completion
             fi
-            
+
             local command_name="$(basename "${COMP_WORDS[0]}")"
             case "$command_name" in
                 routeto)
@@ -97,14 +97,14 @@ if [ -n "$BASH_VERSION" ]; then
                     ;;
             esac
         fi
-        
+
         # Fallback to default file completion if routes not found
         return 1
     }
 
     # Register completion for bash
     complete -F _extravio_completion routeto
-    complete -F _extravio_completion file_copy  
+    complete -F _extravio_completion file_copy
     complete -F _extravio_completion remote-ha
     complete -F _extravio_completion remote-docker
 
@@ -118,7 +118,7 @@ elif [ -n "$ZSH_VERSION" ]; then
     # Zsh completion
     _extravio_zsh_completion() {
         local script_dir
-        
+
         # Find script directory
         if [[ "$words[1]" == *"/routing/"* ]]; then
             script_dir="$(dirname "$words[1]")"
@@ -132,14 +132,14 @@ elif [ -n "$ZSH_VERSION" ]; then
                 fi
             fi
         fi
-        
+
         # Source routes if available
         if [ -f "$script_dir/get_routes.sh" ]; then
             source "$script_dir/get_routes.sh" 2>/dev/null
             if [ ${#keys[@]} -eq 0 ]; then
                 return 1
             fi
-            
+
             local command_name="$(basename "$words[1]")"
             case "$command_name" in
                 routeto)
@@ -190,7 +190,7 @@ elif [ -n "$ZSH_VERSION" ]; then
             esac
         fi
     }
-    
+
     # Register zsh completion
     autoload -U compinit
     compinit -u 2>/dev/null
@@ -206,29 +206,3 @@ else
     # Unknown shell - skip completion setup
     echo "Warning: Shell completion only supported for bash and zsh" >&2
 fi
-                        local ha_routes=()
-                        for key in "${keys[@]}"; do
-                            if [[ "$key" == ha-* ]]; then
-                                ha_routes+=("$key")
-                                # Add shortened version (without ha- prefix)
-                                ha_routes+=("${key#ha-}")
-                            fi
-                        done
-                        COMPREPLY=( $(compgen -W "${ha_routes[*]}" -- ${cur}) )
-                        ;;
-                    2)
-                        # Second argument: HA command
-                        local ha_commands="core supervisor addons info logs restart reload"
-                        COMPREPLY=( $(compgen -W "$ha_commands" -- ${cur}) )
-                        ;;
-                esac
-                return 0
-                ;;
-        esac
-    fi
-}
-
-# Register completion for all routing tools
-complete -F _extravio_completion routeto
-complete -F _extravio_completion file_copy  
-complete -F _extravio_completion remote-ha

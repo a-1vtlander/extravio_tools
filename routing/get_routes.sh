@@ -43,7 +43,8 @@ find_partial_matches() {
     local matches=()
     
     for key in "${keys[@]}"; do
-        if [[ "$key" == "$input"* ]]; then
+        # Match anywhere in the alias (subword/substring match), not just prefix
+        if [[ "$key" == *"$input"* ]]; then
             matches+=("$key")
         fi
     done

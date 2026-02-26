@@ -4,6 +4,51 @@
 
 source "$(dirname "$0")/get_routes.sh"
 source "$(dirname "$0")/common.sh"
+ 
+# Handle unknown/ambiguous alias reporting in one place
+handle_no_match() {
+    local missing_alias="$1"
+    echo "Unknown alias: $missing_alias"
+    echo "Available aliases:"
+    for key in "${keys[@]}"; do
+        echo "  $key"
+    done
+    exit 1
+}
+
+# Optional quick lookup: `--get <alias>` prints the host (IP/hostname) only and exits
+if [ "$#" -ge 1 ] && [ "$1" = "--get" ]; then
+    if [ "$#" -lt 2 ]; then
+        echo "Usage: $(basename "$0") --get <alias>"
+        exit 1
+    fi
+    query_alias="$2"
+
+    # Try to resolve best match for the provided alias
+    best_match=$(get_best_match "$query_alias")
+    match_result=$?
+
+    if [ $match_result -eq 0 ]; then
+        # If this is a docker route, get_docker_info returns user@host:ts:container
+        if docker_info=$(get_docker_info "$best_match" 2>/dev/null); then
+            addr="$docker_info"
+        else
+            addr=$(get_address "$best_match")
+        fi
+
+        # Extract hostname/IP portion (strip username@ and trailing :tailscale flag)
+        host_and_tail="${addr#*@}"
+        host="${host_and_tail%%:*}"
+        echo "$host"
+        exit 0
+    elif [ $match_result -eq 2 ]; then
+        echo "Ambiguous alias: $query_alias"
+        find_partial_matches "$query_alias" | sed 's/^/  /'
+        exit 1
+    else
+        handle_no_match "$query_alias"
+    fi
+fi
 
 ensure_ssh_agent
 
@@ -57,9 +102,10 @@ run_ssh() {
 }
 
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    echo "Usage: $(basename "$0")"
+    echo "Usage: $(basename "$0") [--get <alias>] <alias>"
     echo ""
     echo "This script routes SSH connections to various devices."
+    echo "Optional: --get <alias>  # print hostname/IP only and exit"
     echo "For Tailscale-enabled routes (pi-tailscale), it ensures Tailscale is active."
     echo "Local routes connect directly."
     echo ""
@@ -119,10 +165,5 @@ elif [ $match_result -eq 2 ]; then
     find_partial_matches "$alias" | sed 's/^/  /'
     exit 1
 else
-    echo "Unknown alias: $alias"
-    echo "Available aliases:"
-    for key in "${keys[@]}"; do
-        echo "  $key"
-    done
-    exit 1
+    handle_no_match "$alias"
 fi

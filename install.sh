@@ -31,7 +31,7 @@ for dir in $(find "$PROJECT_ROOT" -mindepth 1 -maxdepth 1 -type d -name "[^.]*")
 done
 
 # Add bash completion
-COMPLETION_LINE="source \"$PROJECT_ROOT/routing/completion.sh\""
+COMPLETION_LINE="source \"$PROJECT_ROOT/routing/completion.bash\""
 if ! grep -q "$COMPLETION_LINE" "$SHELL_RC"; then
     echo "$COMPLETION_LINE" >> "$SHELL_RC"
     echo "Added bash/zsh completion for routing tools"

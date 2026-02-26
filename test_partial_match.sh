@@ -34,4 +34,4 @@ fi
 echo
 
 echo "Testing routeto with partial match..."
-./routing/routeto ha-p 2>&1 | head -3
+./routeto ha-p 2>&1 | head -3
