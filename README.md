@@ -170,20 +170,20 @@ Edit [`routing/routes.json`](routing/routes.json) to add new connection targets:
   "my-server": {
     "username": "myuser",
     "hostroute": "hostname.example.com",
-    "tailscale_required": "yes",
+    "reachable_via_tailscale": "yes",
     "hosttype": "pc"
   },
   "local-machine": {
     "username": "user",
     "hostroute": "192.168.1.100",
-    "tailscale_required": "no",
+    "reachable_via_tailscale": "no",
     "hosttype": "mac"
   },
   "dev-container": {
     "username": "user",
     "hostroute": "docker-host.example.com", 
     "dockercontainer": "my-dev-container",
-    "tailscale_required": "no",
+    "reachable_via_tailscale": "no",
     "hosttype": "docker"
   }
 }
@@ -194,7 +194,7 @@ The routes are automatically loaded by [`routing/get_routes.sh`](routing/get_rou
 **Field Specifications:**
 - `username` - SSH username (required)
 - `hostroute` - Hostname, IP address, or FQDN (required)  
-- `tailscale_required` - "yes" or "no" (defaults to "no" if absent)
+- `reachable_via_tailscale` - "yes" or "no" (defaults to "no" if absent)
 - `hosttype` - "ha", "pi", "mac", "pc", "docker", "unknown" (defaults to "unknown" if absent)
 - `dockercontainer` - Docker container name (required for `hosttype: "docker"`)
 
@@ -257,12 +257,12 @@ The routing tools automatically manage SSH agent lifecycle:
 - Maintains agent across tool invocations
 
 ### Tailscale Integration
-For routes marked with `tailscale_required:"yes"`:
+For routes marked with `reachable_via_tailscale:"yes"`:
 - Automatically runs `tailscale up` before connecting
 - Ensures connectivity to Tailscale-only hosts
 - Only activates when needed
 
-For routes marked with `tailscale_required:"no"`:
+For routes marked with `reachable_via_tailscale:"no"`:
 - Uses direct/local connection
 - By default, shows a note if Tailscale is active but not required
 - Can optionally disable Tailscale when not needed (see Environment Variables)

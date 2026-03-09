@@ -12,11 +12,11 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # Function to get address for a given alias
-# Returns: user@host:needs_tailscale format
+# Returns: user@host:reachable_via_tailscale format
 # Exit code: 0 if found, 1 if not found
 get_address() {
     local alias="$1"
-    local route_obj username hostroute tailscale_required
+    local route_obj username hostroute reachable_via_tailscale
     
     route_obj=$(jq --arg alias "$alias" '.[$alias] // empty' "$ROUTES_JSON" 2>/dev/null)
     if [ "$route_obj" = "null" ] || [ -z "$route_obj" ]; then
@@ -25,13 +25,13 @@ get_address() {
     
     username=$(echo "$route_obj" | jq -r '.username // empty')
     hostroute=$(echo "$route_obj" | jq -r '.hostroute // empty')
-    tailscale_required=$(echo "$route_obj" | jq -r '.tailscale_required // "no"')
+    reachable_via_tailscale=$(echo "$route_obj" | jq -r '.reachable_via_tailscale // "no"')
     
     if [ -z "$username" ] || [ -z "$hostroute" ]; then
         return 1
     fi
     
-    echo "$username@$hostroute:$tailscale_required"
+    echo "$username@$hostroute:$reachable_via_tailscale"
     return 0
 }
 
@@ -84,17 +84,17 @@ get_best_match() {
 
 # Function to get route field for a given alias
 # Usage: get_route_field <alias> <field>
-# Fields: username, hostroute, tailscale_required, hosttype, dockercontainer
+# Fields: username, hostroute, reachable_via_tailscale, hosttype, dockercontainer
 get_route_field() {
     local alias="$1"
     local field="$2"
     local result
     
     case "$field" in
-        tailscale_required|hosttype)
+        reachable_via_tailscale|hosttype)
             # These fields have defaults if missing
             local default_value
-            if [ "$field" = "tailscale_required" ]; then
+            if [ "$field" = "reachable_via_tailscale" ]; then
                 default_value="no"
             else
                 default_value="unknown"
@@ -119,7 +119,7 @@ get_route_field() {
 # Exit code: 0 if docker route found, 1 if not docker or not found
 get_docker_info() {
     local alias="$1"
-    local hosttype username hostroute tailscale_required dockercontainer
+    local hosttype username hostroute reachable_via_tailscale dockercontainer
     
     hosttype=$(get_route_field "$alias" "hosttype" 2>/dev/null)
     if [ "$hosttype" != "docker" ]; then
@@ -128,14 +128,14 @@ get_docker_info() {
     
     username=$(get_route_field "$alias" "username" 2>/dev/null)
     hostroute=$(get_route_field "$alias" "hostroute" 2>/dev/null)
-    tailscale_required=$(get_route_field "$alias" "tailscale_required" 2>/dev/null)
+    reachable_via_tailscale=$(get_route_field "$alias" "reachable_via_tailscale" 2>/dev/null)
     dockercontainer=$(get_route_field "$alias" "dockercontainer" 2>/dev/null)
     
     if [ -z "$username" ] || [ -z "$hostroute" ] || [ -z "$dockercontainer" ]; then
         return 1
     fi
     
-    echo "$username@$hostroute:$tailscale_required:$dockercontainer"
+    echo "$username@$hostroute:$reachable_via_tailscale:$dockercontainer"
     return 0
 }
 

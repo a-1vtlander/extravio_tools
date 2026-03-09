@@ -75,7 +75,7 @@ if [ $match_result -eq 0 ]; then
     if [ "$best_match" != "$alias" ]; then
         echo "-> Using partial match: '$alias' -> '$best_match'"
     fi
-    ensure_tailscale "$needs_ts"
+    ensure_host_reachability_if_tailscale_required "$needs_ts" "${host#*@}"
     echo "Copying $src to $host:$dst..."
     if [[ "$best_match" == ha-* ]]; then
         echo "Using SSH for copy (SCP not supported for $best_match)..."

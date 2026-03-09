@@ -4,7 +4,13 @@
 
 source "$(dirname "$0")/get_routes.sh"
 source "$(dirname "$0")/common.sh"
- 
+
+# Support a verbose flag to enable debug logging
+if [ "$#" -ge 1 ] && { [ "$1" = "--verbose" ] || [ "$1" = "-v" ]; }; then
+    export EXTRAVIO_DEBUG=yes
+    shift
+fi
+
 # Handle unknown/ambiguous alias reporting in one place
 handle_no_match() {
     local missing_alias="$1"
@@ -146,7 +152,7 @@ if [ $match_result -eq 0 ]; then
             echo "-> Using partial match: '$alias' -> '$best_match'"
         fi
         echo "-> Connecting to docker container '$container' on host '$host'"
-        ensure_tailscale "$needs_ts"
+        ensure_host_reachability_if_tailscale_required "$needs_ts" "${host#*@}"
         run_ssh "docker" "$container" "$host"
     else
         # Regular SSH route
@@ -156,7 +162,7 @@ if [ $match_result -eq 0 ]; then
         if [ "$best_match" != "$alias" ]; then
             echo "-> Using partial match: '$alias' -> '$best_match'"
         fi
-        ensure_tailscale "$needs_ts"
+        ensure_host_reachability_if_tailscale_required "$needs_ts" "${host#*@}"
         run_ssh "regular" "" "$host"
     fi
 elif [ $match_result -eq 2 ]; then

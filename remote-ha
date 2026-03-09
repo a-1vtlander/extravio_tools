@@ -34,7 +34,7 @@ fi
 
 host="${addr%%:*}"
 needs_ts="${addr#*:}"
-ensure_tailscale "$needs_ts"
+ensure_host_reachability_if_tailscale_required "$needs_ts" "${host#*@}"
 
 # Handle special addon aliases
 args=("$@")
