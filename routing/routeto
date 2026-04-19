@@ -153,7 +153,29 @@ if [ $match_result -eq 0 ]; then
         fi
         echo "-> Connecting to docker container '$container' on host '$host'"
         ensure_host_reachability_if_tailscale_required "$needs_ts" "${host#*@}"
-        run_ssh "docker" "$container" "$host"
+        # .local fallback logic for docker host
+        orig_host="$host"
+        # Extract just the hostname for reachability checks
+        reach_host="${host#*@}"
+        if [[ "$host" == *.local ]]; then
+            echo "[debug] Checking reachability of Docker host: $reach_host" >&2
+            if ping -c 1 -W 1 "$reach_host" >/dev/null 2>&1 || host "$reach_host" >/dev/null 2>&1; then
+                echo "[debug] Docker host $reach_host is reachable, attempting SSH" >&2
+                run_ssh "docker" "$container" "$host"
+            else
+                fallback_host="${reach_host%.local}"
+                echo "[info] $reach_host not reachable, trying fallback: $fallback_host" >&2
+                run_ssh "docker" "$container" "$fallback_host"
+            fi
+        else
+            echo "[debug] Checking reachability of Docker host: $reach_host (no .local)" >&2
+            if ping -c 1 -W 1 "$reach_host" >/dev/null 2>&1 || host "$reach_host" >/dev/null 2>&1; then
+                run_ssh "docker" "$container" "$host"
+            else
+                echo "[error] Docker host $reach_host is not reachable or resolvable" >&2
+                exit 1
+            fi
+        fi
     else
         # Regular SSH route
         addr=$(get_address "$best_match")
@@ -163,7 +185,29 @@ if [ $match_result -eq 0 ]; then
             echo "-> Using partial match: '$alias' -> '$best_match'"
         fi
         ensure_host_reachability_if_tailscale_required "$needs_ts" "${host#*@}"
-        run_ssh "regular" "" "$host"
+        # .local fallback logic for regular host
+        orig_host="$host"
+        # Extract just the hostname for reachability checks
+        reach_host="${host#*@}"
+        if [[ "$host" == *.local ]]; then
+            echo "[debug] Checking reachability of host: $reach_host" >&2
+            if ping -c 1 -W 1 "$reach_host" >/dev/null 2>&1 || host "$reach_host" >/dev/null 2>&1; then
+                echo "[debug] Host $reach_host is reachable, attempting SSH" >&2
+                run_ssh "regular" "" "$host"
+            else
+                fallback_host="${reach_host%.local}"
+                echo "[info] $reach_host not reachable, trying fallback: $fallback_host" >&2
+                run_ssh "regular" "" "$fallback_host"
+            fi
+        else
+            echo "[debug] Checking reachability of host: $reach_host (no .local)" >&2
+            if ping -c 1 -W 1 "$reach_host" >/dev/null 2>&1 || host "$reach_host" >/dev/null 2>&1; then
+                run_ssh "regular" "" "$host"
+            else
+                echo "[error] Host $reach_host is not reachable or resolvable" >&2
+                exit 1
+            fi
+        fi
     fi
 elif [ $match_result -eq 2 ]; then
     echo "Ambiguous alias: $alias"

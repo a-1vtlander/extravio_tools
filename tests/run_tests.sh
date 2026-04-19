@@ -6,4 +6,5 @@ cd "$DIR/.."
 
 echo "Running tests..."
 bash tests/test_common.sh
+bash tests/test_user_routes_merge.sh
 echo "Tests completed."

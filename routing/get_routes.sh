@@ -11,6 +11,27 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 1
 fi
 
+# Merge user-level routes (~/.routes/routes.json) with repo routes if present.
+# User routes take precedence on key conflicts.
+# A missing, empty, or invalid user file is silently ignored so repo routes
+# always remain functional.
+_USER_ROUTES_JSON="$HOME/.routes/routes.json"
+if [ -f "$_USER_ROUTES_JSON" ]; then
+    if ! jq empty "$_USER_ROUTES_JSON" >/dev/null 2>&1; then
+        echo "Warning: $_USER_ROUTES_JSON contains invalid JSON — ignoring user routes." >&2
+        _EFFECTIVE_ROUTES=$(< "$ROUTES_JSON")
+    else
+        _EFFECTIVE_ROUTES=$(jq -s '.[0] * .[1]' "$ROUTES_JSON" "$_USER_ROUTES_JSON" 2>/dev/null)
+        # Guard against a merge that somehow produced empty output
+        if [ -z "$_EFFECTIVE_ROUTES" ]; then
+            echo "Warning: failed to merge user routes — falling back to repo routes only." >&2
+            _EFFECTIVE_ROUTES=$(< "$ROUTES_JSON")
+        fi
+    fi
+else
+    _EFFECTIVE_ROUTES=$(< "$ROUTES_JSON")
+fi
+
 # Function to get address for a given alias
 # Returns: user@host:reachable_via_tailscale format
 # Exit code: 0 if found, 1 if not found
@@ -18,7 +39,7 @@ get_address() {
     local alias="$1"
     local route_obj username hostroute reachable_via_tailscale
     
-    route_obj=$(jq --arg alias "$alias" '.[$alias] // empty' "$ROUTES_JSON" 2>/dev/null)
+    route_obj=$(jq --arg alias "$alias" '.[$alias] // empty' <<< "$_EFFECTIVE_ROUTES" 2>/dev/null)
     if [ "$route_obj" = "null" ] || [ -z "$route_obj" ]; then
         return 1
     fi
@@ -99,10 +120,10 @@ get_route_field() {
             else
                 default_value="unknown"
             fi
-            result=$(jq -r --arg alias "$alias" --arg field "$field" --arg default "$default_value" '.[$alias][$field] // $default' "$ROUTES_JSON" 2>/dev/null)
+            result=$(jq -r --arg alias "$alias" --arg field "$field" --arg default "$default_value" '.[$alias][$field] // $default' <<< "$_EFFECTIVE_ROUTES" 2>/dev/null)
             ;;
         *)
-            result=$(jq -r --arg alias "$alias" --arg field "$field" '.[$alias][$field] // empty' "$ROUTES_JSON" 2>/dev/null)
+            result=$(jq -r --arg alias "$alias" --arg field "$field" '.[$alias][$field] // empty' <<< "$_EFFECTIVE_ROUTES" 2>/dev/null)
             ;;
     esac
     
@@ -144,4 +165,4 @@ get_docker_info() {
 keys=()
 while IFS= read -r key; do
     keys+=("$key")
-done < <(jq -r 'keys[]' "$ROUTES_JSON" 2>/dev/null)
+done < <(jq -r 'keys[]' <<< "$_EFFECTIVE_ROUTES" 2>/dev/null)

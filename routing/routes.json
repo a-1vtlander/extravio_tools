@@ -20,31 +20,11 @@
     "local_wifi": "Lander-Fi",
     "hosttype": "ha"
   },
-  "park-st-mac": {
-    "username": "homeassistant",
-    "hostroute": "park-street-homeassistant-mac.local",
-    "reachable_via_tailscale": "no",
-    "hosttype": "mac"
-  },
   "pi-vtlander": {
     "username": "a-1vtlander",
     "hostroute": "baselander.power-pi",
     "reachable_via_tailscale": "yes",
     "local_wifi": "Lander-Fi",
     "hosttype": "pi"
-  },
-   "dev-ha-mac": {
-    "username": "homeassistant",
-    "dockercontainer": "ha-dev",
-    "hostroute": "park-street-homeassistant-mac.local",
-    "reachable_via_tailscale": "no",
-    "hosttype": "docker"
-  },
-   "prod-ha-mac": {
-    "username": "homeassistant",
-    "dockercontainer": "homeassistant",
-    "hostroute": "park-street-homeassistant-mac.local",
-    "reachable_via_tailscale": "no",
-    "hosttype": "docker"
-  } 
+  }
 }
